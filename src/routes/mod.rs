@@ -9,6 +9,7 @@ use axum::{
         post
     }
 };
+use crate::routes::create_post::create_post;
 use crate::routes::home::index;
 
 pub fn create_routes() -> Router<(), Body> {
