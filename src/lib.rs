@@ -1,5 +1,6 @@
 pub mod domain;
 mod routes;
+mod common;
 
 use crate::routes::create_routes;
 
