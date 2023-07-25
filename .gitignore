@@ -3,3 +3,6 @@
 
 # Editor
 .idea
+
+# Editor-based Rest Client
+.idea/httpRequests
