@@ -28,8 +28,8 @@ CREATE TABLE IF NOT EXISTS post_contents (
 ;
 
 CREATE TABLE IF NOT EXISTS post_likes (
-	user_id INTEGER DEFAULT NULL,
-	post_id INTEGER DEFAULT NULL,
+	user_id VARCHAR(64) DEFAULT NULL,
+	post_id INTEGER     DEFAULT NULL,
 	CONSTRAINT fk_users FOREIGN KEY (user_id) REFERENCES users (user_id),
 	CONSTRAINT fk_posts FOREIGN KEY (post_id) REFERENCES posts (id)
 )
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS post_likes (
 CREATE TABLE IF NOT EXISTS comments (
 	id        SERIAL PRIMARY KEY,
 	post_id   INTEGER     DEFAULT NULL,
-	user_id   INTERVAL    DEFAULT NULL,
+	user_id   VARCHAR(64) DEFAULT NULL,
 	content   TEXT        DEFAULT NULL,
 	create_dt TIMESTAMPTZ DEFAULT NULL,
 	update_dt TIMESTAMPTZ DEFAULT NULL,
@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS comments (
 ;
 
 CREATE TABLE IF NOT EXISTS comment_like (
-	user_id    INTEGER DEFAULT NULL,
+	user_id    VARCHAR(64) DEFAULT NULL,
 	comment_id INTEGER DEFAULT NULL,
 	CONSTRAINT fk_users FOREIGN KEY (user_id) REFERENCES users (user_id),
 	CONSTRAINT fk_comments FOREIGN KEY (comment_id) REFERENCES comments (id)
@@ -56,11 +56,11 @@ CREATE TABLE IF NOT EXISTS comment_like (
 ;
 
 INSERT INTO
-	users(user_id, password)
+	users(user_id, password, create_dt, delete_dt)
 VALUES
-	('jerok.kim@gmail.com', 'jerok'),
-	('krustacean@gmail.com', 'krustacean'),
-	('ferris@gmail.com', 'ferris')
+	('jerok.kim@gmail.com', 'jerok', NOW(), NULL),
+	('krustacean@gmail.com', 'krustacean', NOW(), NULL),
+	('ferris@gmail.com', 'ferris', NOW(), NULL)
 ;
 
 INSERT INTO
@@ -82,23 +82,23 @@ VALUES
 INSERT INTO
 	post_likes(user_id, post_id)
 VALUES
-	(1, 2),
-	(1, 3),
-	(3, 2)
+	('jerok.kim@gmail.com', 2),
+	('krustacean@gmail.com', 3),
+	('ferris@gmail.com', 2)
 ;
 
 INSERT INTO
 	comments(post_id, user_id, content, create_dt, update_dt)
 VALUES
-	(1, 2, 'comment by krustacean at post of jerok', NOW(), NOW()),
-	(2, 3, 'comment by ferris at post of krustacean', NOW(), NOW()),
-	(3, 1, 'comment by jerok at post of ferris', NOW(), NOW())
+	(1, 'krustacean@gmail.com', 'comment by krustacean at post of jerok', NOW(), NOW()),
+	(2, 'ferris@gmail.com', 'comment by ferris at post of krustacean', NOW(), NOW()),
+	(3, 'jerok.kim@gmail.com', 'comment by jerok at post of ferris', NOW(), NOW())
 ;
 
 INSERT INTO
 	comment_like(user_id, comment_id)
 VALUES
-	(1, 2),
-	(2, 2),
-	(3, 2)
+	('jerok.kim@gmail.com', 2),
+	('krustacean@gmail.com', 2),
+	('ferris@gmail.com', 2)
 ;
