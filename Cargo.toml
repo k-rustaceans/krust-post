@@ -6,4 +6,16 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-chrono = {version="*",feature=["serde"]}
+event-driven-library = {version="0.1.7"}
+chrono = {version="*",features=["serde"]}
+macro_rules_attribute="*"
+async-trait = {version="*"}
+paste="*"
+serde = {version="*",features=["derive"]}
+serde_json = "*"
+tower = { version = "0.4", features = ["util", "timeout"] }
+tower-http = { version = "0.4.0", features = ["add-extension", "trace","cors"] }
+axum = {version="*",features=["headers"]}
+axum-macros = {version="*"}
+tokio = { version = "*", features = ["rt", "rt-multi-thread", "net", "time", "macros"] }
+mongodb = {version="*",features = ["tokio-sync","tokio-runtime","bson-serde_with","openssl-tls"]}
