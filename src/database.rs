@@ -106,7 +106,10 @@ pub struct QueuePubExecutor {
 }
 
 impl QueuePubExecutor {
-	pub async fn new() -> Self {
+	pub async fn new(
+		topic: &str,
+		producer_name: &str,
+	) -> Self {
 		Self {
 			producer: {
 				dotenv::dotenv().ok();
@@ -115,8 +118,8 @@ impl QueuePubExecutor {
 
 				pulsar
 					.producer()
-					.with_topic("non-persistent://public/default/test")
-					.with_name("my producer")
+					.with_topic(topic)
+					.with_name(producer_name)
 					.with_options(producer::ProducerOptions {
 						schema: Some(proto::Schema {
 							r#type: proto::schema::Type::String as i32,
@@ -167,7 +170,7 @@ impl<T: DeserializeMessage + 'static> QueueConExecutor<T> {
 				.consumer()
 				.with_topic(topic)
 				.with_consumer_name("test_consumer")
-				.with_subscription_type(SubType::Exclusive)
+				.with_subscription_type(SubType::Shared)
 				.with_subscription(subscription)
 				.build()
 				.await
@@ -219,19 +222,22 @@ mod test {
 		topic: &str,
 		subscription: &str,
 	) -> Result<(), PulsarError> {
+		use pulsar::proto::MessageIdData;
 		let mut consumer: QueueConExecutor<T> = QueueConExecutor::new(topic, subscription).await;
-		println!("dsds");
 
-		while let Some(msg) = consumer.try_next().await? {
-			println!("Some value! ");
-			consumer.ack(&msg).await?;
-		}
+		let vec_message_ids: Vec<MessageIdData> = consumer.get_last_message_id().await.unwrap();
+		let last = vec_message_ids.last().unwrap().clone();
+		consumer.ack_with_id(topic, last).await?;
+
 		Ok(())
 	}
 
 	#[tokio::test]
 	async fn test_publish() {
-		let mut producer = QueuePubExecutor::new().await;
+		let topic = "test";
+
+		let mut producer = QueuePubExecutor::new(topic, "test_producer1").await;
+
 		match producer
 			.send(TestData {
 				data: "data".to_string(),
@@ -240,7 +246,9 @@ mod test {
 			.unwrap()
 			.await
 		{
-			Ok(val) => println!("{:?}", val),
+			Ok(val) => {
+				println!("{:?}", val);
+			}
 			Err(err) => panic!("{}", err),
 		}
 	}
@@ -254,19 +262,17 @@ mod test {
 	}
 
 	#[tokio::test]
-	#[ignore]
 	//TODO get this test passed!
 	async fn test_round_trip() {
 		'_given: {
 			let topic = "test";
 			let subscription = "test_subscription";
 			set_up::<TestData>(topic, subscription).await.unwrap();
-
 			'_when: {
-				let mut producer = QueuePubExecutor::new().await;
+				let mut producer = QueuePubExecutor::new(topic, "test_producer2").await;
 				producer
 					.send(TestData {
-						data: "TestDataForRoundTrip".to_string(),
+						data: "TestDataForRoundTrip23".to_string(),
 					})
 					.await
 					.unwrap();
@@ -276,7 +282,8 @@ mod test {
 
 				if let Some(msg) = consumer.try_next().await.unwrap() {
 					let data = msg.deserialize().unwrap();
-					assert_eq!(data.data, "TestDataForRoundTrip".to_string());
+					consumer.ack(&msg).await.unwrap();
+					assert_eq!(data.data, "TestDataForRoundTrip23".to_string());
 				} else {
 					panic!("Test Failed!")
 				}
