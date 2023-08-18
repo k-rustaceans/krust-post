@@ -18,7 +18,10 @@ tower-http = { version = "0.4.0", features = ["add-extension", "trace","cors"] }
 axum = {version="*",features=["headers"]}
 axum-macros = {version="*"}
 tokio = { version = "*", features = ["rt", "rt-multi-thread", "net", "time", "macros"] }
-futures = "*"
 dotenv={version="*"}
 sqlx = { version = "*", features = [ "runtime-tokio-rustls", "migrate", "postgres","uuid","chrono","offline","decimal","json"] }
 
+env_logger = "*"
+pulsar = "*"
+log = "*"
+futures = "*"
