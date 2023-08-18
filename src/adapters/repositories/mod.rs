@@ -3,7 +3,7 @@ use std::mem;
 use std::{collections::VecDeque, marker::PhantomData, sync::Arc};
 
 use event_driven_library::domain::Aggregate;
-use event_driven_library::domain::Buildable;
+
 use event_driven_library::domain::Message;
 use event_driven_library::repository::TRepository;
 use tokio::sync::RwLock;
@@ -16,7 +16,7 @@ pub struct Repository<A: Aggregate> {
 	pub events: VecDeque<Box<dyn Message>>,
 }
 
-impl<A: Aggregate + Buildable<A> + 'static> TRepository<ServiceExecutor> for Repository<A> {
+impl<A: Aggregate + 'static> TRepository<ServiceExecutor> for Repository<A> {
 	fn new(executor: Arc<RwLock<ServiceExecutor>>) -> Self {
 		Self {
 			executor,

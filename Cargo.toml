@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-event-driven-library = {version="0.1.7"}
+event-driven-library = {version="0.1.10"}
 chrono = {version="*",features=["serde"]}
 macro_rules_attribute="*"
 async-trait = {version="*"}
@@ -18,4 +18,13 @@ tower-http = { version = "0.4.0", features = ["add-extension", "trace","cors"] }
 axum = {version="*",features=["headers"]}
 axum-macros = {version="*"}
 tokio = { version = "*", features = ["rt", "rt-multi-thread", "net", "time", "macros"] }
-mongodb = {version="*",features = ["tokio-sync","tokio-runtime","bson-serde_with","openssl-tls"]}
+futures = "*"
+dotenv={version="*"}
+
+
+
+
+[dependencies.mongodb]
+version = "2.6.1"
+default-features = false
+features = ["tokio-sync","tokio-runtime","bson-serde_with","openssl-tls"]
