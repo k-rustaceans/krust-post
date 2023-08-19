@@ -22,6 +22,7 @@ dotenv={version="*"}
 sqlx = { version = "*", features = [ "runtime-tokio-rustls", "migrate", "postgres","uuid","chrono","offline","decimal","json"] }
 
 env_logger = "*"
-pulsar = "*"
+pulsar = {version="*" }
 log = "*"
 futures = "*"
+futures-util="*"
