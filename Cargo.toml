@@ -15,7 +15,7 @@ serde = {version="*",features=["derive"]}
 serde_json = "*"
 tower = { version = "0.4", features = ["util", "timeout"] }
 tower-http = { version = "0.4.0", features = ["add-extension", "trace","cors"] }
-axum = {version="*",features=["headers"]}
+axum = {version="*",features=["headers","ws"]}
 axum-macros = {version="*"}
 tokio = { version = "*", features = ["rt", "rt-multi-thread", "net", "time", "macros"] }
 dotenv={version="*"}
