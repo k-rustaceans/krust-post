@@ -58,6 +58,7 @@ pub enum ServiceError {
 	EntityNotFound,
 	InvalidURL,
 	ParsingError,
+	UserCloseConnection,
 	StopSentinel,
 	HttpError(Box<AnyError>),
 	BadRequest,
@@ -78,6 +79,7 @@ impl Display for ServiceError {
 			ServiceError::HttpError(res) => write!(f, "{}", res),
 			ServiceError::BadRequest => write!(f, "BadRequest"),
 			ServiceError::BaseError(base) => write!(f, "{}", &base.to_string()),
+			ServiceError::UserCloseConnection => write!(f, "UserCloseConnection"),
 		}
 	}
 }
