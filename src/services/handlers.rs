@@ -46,6 +46,9 @@ impl ThreadHandler {
 			ThreadHandler::_send_messages_from_chatroom_to_this_user(chatters.clone(), sender);
 
 		let mut recv_task = ThreadHandler::_receive_messages_from_this_user(receiver);
+
+		// Waits on multiple concurrent branches, returning when the first branch completes,
+		// cancelling the remaining branches.
 		tokio::select! {
 			_ = (&mut send_task) => recv_task.abort(),
 			_ = (&mut recv_task) => send_task.abort(),
