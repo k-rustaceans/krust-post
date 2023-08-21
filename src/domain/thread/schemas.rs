@@ -26,13 +26,10 @@ impl TryFrom<axum::extract::ws::Message> for ClientMessage {
 	fn try_from(value: axum::extract::ws::Message) -> Result<Self, Self::Error> {
 		match value {
 			axum::extract::ws::Message::Text(string_value) => {
-				serde_json::from_str::<ClientMessage>(&string_value)
-					.map_err(|_err| ServiceError::ParsingError)
+				serde_json::from_str::<ClientMessage>(&string_value).map_err(|_err| ServiceError::ParsingError)
 			}
 
-			axum::extract::ws::Message::Close(_close_frame) => {
-				Err(ServiceError::UserCloseConnection)
-			}
+			axum::extract::ws::Message::Close(_close_frame) => Err(ServiceError::UserCloseConnection),
 			_ => Err(ServiceError::BadRequest),
 		}
 	}

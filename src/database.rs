@@ -1,17 +1,16 @@
-use std::env;
-use std::ops::{Deref, DerefMut};
-use std::sync::OnceLock;
-use std::{mem, sync::Arc};
-
 use event_driven_library::responses::BaseError;
+use std::ops::{Deref, DerefMut};
+use std::{mem, sync::Arc};
 
 use pulsar::message::proto::command_subscribe::SubType;
 use pulsar::{message::proto, producer, Pulsar};
 use pulsar::{Consumer, DeserializeMessage, Producer, TokioExecutor};
-use sqlx::postgres::PgPoolOptions;
+
 use sqlx::{postgres::PgPool, Postgres, Transaction};
 
 use tokio::sync::RwLock;
+
+use crate::dependencies::{config, connection_pool};
 
 pub struct DatabaseExecutor {
 	pool: &'static PgPool,
@@ -38,12 +37,7 @@ impl DatabaseExecutor {
 	pub(crate) async fn begin(&mut self) -> Result<(), BaseError> {
 		match self.transaction.as_mut() {
 			None => {
-				self.transaction = Some(
-					self.pool
-						.begin()
-						.await
-						.map_err(|err| BaseError::DatabaseConnectionError(Box::new(err)))?,
-				);
+				self.transaction = Some(self.pool.begin().await.map_err(|err| BaseError::DatabaseConnectionError(Box::new(err)))?);
 				Ok(())
 			}
 			Some(_trx) => {
@@ -70,9 +64,7 @@ impl DatabaseExecutor {
 		};
 
 		let trx = mem::take(&mut self.transaction).unwrap();
-		trx.rollback()
-			.await
-			.map_err(|err| BaseError::DatabaseConnectionError(Box::new(err)))
+		trx.rollback().await.map_err(|err| BaseError::DatabaseConnectionError(Box::new(err)))
 	}
 }
 
@@ -80,25 +72,6 @@ impl From<DatabaseExecutor> for Arc<RwLock<DatabaseExecutor>> {
 	fn from(value: DatabaseExecutor) -> Self {
 		Arc::new(RwLock::new(value))
 	}
-}
-
-pub async fn connection_pool() -> &'static PgPool {
-	static POOL: OnceLock<PgPool> = OnceLock::new();
-	dotenv::dotenv().ok();
-	let url = &env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-	let p = match POOL.get() {
-		None => {
-			let pool = PgPoolOptions::new()
-				.max_connections(30)
-				.connect(url)
-				.await
-				.map_err(|err| BaseError::DatabaseConnectionError(Box::new(err)))
-				.unwrap();
-			POOL.get_or_init(|| pool)
-		}
-		Some(pool) => pool,
-	};
-	p
 }
 
 pub struct QueuePubExecutor {
@@ -112,9 +85,9 @@ impl QueuePubExecutor {
 	) -> Self {
 		Self {
 			producer: {
-				dotenv::dotenv().ok();
-				let url = &env::var("QUEUE_URL").expect("QUEUE_URL must be set");
-				let pulsar: Pulsar<_> = Pulsar::builder(url, TokioExecutor).build().await.unwrap();
+				let config = config();
+
+				let pulsar: Pulsar<_> = Pulsar::builder(&config.queue_url, TokioExecutor).build().await.unwrap();
 
 				pulsar
 					.producer()
@@ -162,9 +135,8 @@ impl<T: DeserializeMessage + 'static> QueueConExecutor<T> {
 		topic: &str,
 		subscription: &str,
 	) -> Self {
-		dotenv::dotenv().ok();
-		let url = &env::var("QUEUE_URL").expect("QUEUE_URL must be set");
-		let pulsar: Pulsar<_> = Pulsar::builder(url, TokioExecutor).build().await.unwrap();
+		let config = config();
+		let pulsar: Pulsar<_> = Pulsar::builder(&config.queue_url, TokioExecutor).build().await.unwrap();
 		Self {
 			consumer: pulsar
 				.consumer()
@@ -209,8 +181,7 @@ mod test {
 	}
 	impl SerializeMessage for TestData {
 		fn serialize_message(input: Self) -> Result<producer::Message, PulsarError> {
-			let payload =
-				serde_json::to_vec(&input).map_err(|e| PulsarError::Custom(e.to_string()))?;
+			let payload = serde_json::to_vec(&input).map_err(|e| PulsarError::Custom(e.to_string()))?;
 			Ok(producer::Message {
 				payload,
 				..Default::default()
@@ -238,14 +209,7 @@ mod test {
 
 		let mut producer = QueuePubExecutor::new(topic, "test_producer1").await;
 
-		match producer
-			.send(TestData {
-				data: "data".to_string(),
-			})
-			.await
-			.unwrap()
-			.await
-		{
+		match producer.send(TestData { data: "data".to_string() }).await.unwrap().await {
 			Ok(val) => {
 				println!("{:?}", val);
 			}
@@ -277,8 +241,7 @@ mod test {
 					.await
 					.unwrap();
 
-				let mut consumer: QueueConExecutor<TestData> =
-					QueueConExecutor::new(topic, subscription).await;
+				let mut consumer: QueueConExecutor<TestData> = QueueConExecutor::new(topic, subscription).await;
 
 				if let Some(msg) = consumer.try_next().await.unwrap() {
 					let data = msg.deserialize().unwrap();
