@@ -8,15 +8,22 @@ use std::{
 // domain for messaging feature
 use chrono::{DateTime, Utc};
 use tokio::sync::{broadcast, Mutex, MutexGuard};
+use uuid::Uuid;
 
-pub struct Message {
-	pub id: i64,
+pub struct MainThreadMessage {
+	pub id: Uuid,
 	pub post_id: i64,
-	pub main_thread_id: Option<i64>,
 	pub user_id: String,
 	pub content: String,
 	pub create_dt: DateTime<Utc>,
-	pub update_dt: DateTime<Utc>,
+}
+
+pub struct SubThreadMessage {
+	pub id: Uuid,
+	pub main_thread_id: Uuid,
+	pub user_id: String,
+	pub content: String,
+	pub create_dt: DateTime<Utc>,
 }
 
 pub struct ThreadState(HashMap<ThreadNumber, Chatters>);
@@ -55,6 +62,7 @@ impl From<i64> for ThreadNumber {
 	}
 }
 
+#[derive(Clone)]
 pub struct Chatters(pub(crate) broadcast::Sender<String>);
 impl From<broadcast::Sender<String>> for Chatters {
 	fn from(value: broadcast::Sender<String>) -> Self {

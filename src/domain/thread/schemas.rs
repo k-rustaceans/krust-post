@@ -1,20 +1,21 @@
 use serde::Deserialize;
+use uuid::Uuid;
 
 use crate::services::response::ServiceError;
 
 #[derive(Debug, Deserialize)]
 pub enum ClientMessage {
-	JoinMainThread {
+	JoinChat {
 		post_id: i64,
 		user_id: String,
 	},
-	ToMainThread {
+	WriteMainThread {
 		post_id: i64,
 		user_id: String,
 		content: String,
 	},
-	ToSubThread {
-		main_thread_id: i64,
+	WriteSubThread {
+		main_thread_id: Uuid,
 		user_id: String,
 		content: String,
 	},
