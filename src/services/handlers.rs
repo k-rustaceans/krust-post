@@ -29,8 +29,14 @@ impl ThreadHandler {
 
 		let mut chatters: Option<Chatters> = None;
 		while let Some(Ok(message)) = receiver.next().await {
-			if let Ok(ClientMessage::JoinChat { post_id, .. }) = message.try_into() {
+			if let Ok(ClientMessage::JoinChat { post_id, user_id }) = message.try_into() {
 				chatters = Some(ThreadHandler::get_or_create_thread(post_id, state.clone()).await);
+
+				// Notify user join event!
+				if let Err(ServiceError::MessagePublishingError) = ThreadHandler::notify_user_join(post_id, user_id, state.clone()).await {
+					let _ = sender.send(String::from("Message Publishing failed!").into()).await;
+					return;
+				}
 			} else {
 				let _ = sender.send(String::from("Wrong input was given").into()).await;
 				return;
@@ -50,6 +56,23 @@ impl ThreadHandler {
 			_ = (&mut send_task) => recv_task.abort(),
 			_ = (&mut recv_task) => send_task.abort(),
 		};
+	}
+	async fn notify_user_join(
+		post_id: i64,
+		user_id: String,
+		state: ThreadStateWrapper,
+	) -> Result<(), ServiceError> {
+		state
+			.write()
+			.await
+			.publisher
+			.send(ClientMessage::JoinChat { post_id, user_id })
+			.await
+			.map_err(|err| {
+				tracing::error!("Message publishing error while notifying user join :{:?}", err);
+				ServiceError::MessagePublishingError
+			})?;
+		Ok(())
 	}
 
 	fn _send_messages_from_chatroom_to_this_user(

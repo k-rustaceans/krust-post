@@ -2,6 +2,7 @@ pub mod routers;
 
 use routers::post_routers;
 use std::{env, net::SocketAddr, str::FromStr};
+use uuid::Uuid;
 
 use axum::{
 	http::{HeaderValue, Method},
@@ -9,6 +10,7 @@ use axum::{
 };
 
 use post::{
+	database::QueuePubExecutor,
 	dependencies::config,
 	domain::thread::{ThreadState, ThreadStateWrapper},
 };
@@ -35,7 +37,11 @@ async fn main() {
 	println!("Connections Are Being Pooled...");
 
 	// let bus = Boostrap::message_bus().await;
-	let chat_state: ThreadStateWrapper = ThreadState(Default::default()).into();
+	let chat_state: ThreadStateWrapper = ThreadState {
+		room: Default::default(),
+		publisher: QueuePubExecutor::new("chat", Uuid::new_v4().to_string().as_str()).await,
+	}
+	.into();
 
 	let routers = Router::new()
 		// TODO Order of layer matters to the execution. ATM, nothing has been settled. The order the following middleware is invoked up here so it doesn't affect dev process yet.

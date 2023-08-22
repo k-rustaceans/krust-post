@@ -10,6 +10,8 @@ use chrono::{DateTime, Utc};
 use tokio::sync::{broadcast, Mutex, MutexGuard};
 use uuid::Uuid;
 
+use crate::database::QueuePubExecutor;
+
 pub struct MainThreadMessage {
 	pub id: Uuid,
 	pub post_id: i64,
@@ -26,17 +28,20 @@ pub struct SubThreadMessage {
 	pub create_dt: DateTime<Utc>,
 }
 
-pub struct ThreadState(pub HashMap<ThreadNumber, Chatters>);
+pub struct ThreadState {
+	pub room: HashMap<ThreadNumber, Chatters>,
+	pub publisher: QueuePubExecutor,
+}
 
 impl Deref for ThreadState {
 	type Target = HashMap<ThreadNumber, Chatters>;
 	fn deref(&self) -> &Self::Target {
-		&self.0
+		&self.room
 	}
 }
 impl DerefMut for ThreadState {
 	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.0
+		&mut self.room
 	}
 }
 

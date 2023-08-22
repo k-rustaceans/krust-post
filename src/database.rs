@@ -205,7 +205,7 @@ mod test {
 
 	#[tokio::test]
 	async fn test_publish() {
-		let topic = "test";
+		let topic = "non-persistent://public/default/test";
 
 		let mut producer = QueuePubExecutor::new(topic, "test_producer1").await;
 
@@ -229,9 +229,9 @@ mod test {
 	//TODO get this test passed!
 	async fn test_round_trip() {
 		'_given: {
-			let topic = "test";
+			let topic = "persistent://public/default/test";
 			let subscription = "test_subscription";
-			set_up::<TestData>(topic, subscription).await.unwrap();
+
 			'_when: {
 				let mut producer = QueuePubExecutor::new(topic, "test_producer2").await;
 				producer
