@@ -13,6 +13,8 @@ async-trait = {version="*"}
 paste="*"
 serde = {version="*",features=["derive"]}
 serde_json = "*"
+tracing = "*"
+tracing-subscriber = { version = "*", features = ["env-filter"] }
 tower = { version = "0.4", features = ["util", "timeout"] }
 tower-http = { version = "0.4.0", features = ["add-extension", "trace","cors"] }
 axum = {version="*",features=["headers","ws"]}
@@ -26,3 +28,8 @@ pulsar = {version="*" }
 log = "*"
 futures = "*"
 futures-util="*"
+
+
+[[bin]]
+name = "web"
+path = "./src/bin/web/main.rs"

@@ -26,7 +26,7 @@ pub struct SubThreadMessage {
 	pub create_dt: DateTime<Utc>,
 }
 
-pub struct ThreadState(HashMap<ThreadNumber, Chatters>);
+pub struct ThreadState(pub HashMap<ThreadNumber, Chatters>);
 
 impl Deref for ThreadState {
 	type Target = HashMap<ThreadNumber, Chatters>;
@@ -41,10 +41,15 @@ impl DerefMut for ThreadState {
 }
 
 #[derive(Clone)]
-pub struct ThreadStateWrapper(Arc<Mutex<ThreadState>>);
+pub struct ThreadStateWrapper(pub Arc<Mutex<ThreadState>>);
 impl From<Arc<Mutex<ThreadState>>> for ThreadStateWrapper {
 	fn from(value: Arc<Mutex<ThreadState>>) -> Self {
 		Self(value)
+	}
+}
+impl From<ThreadState> for ThreadStateWrapper {
+	fn from(value: ThreadState) -> Self {
+		Arc::new(Mutex::new(value)).into()
 	}
 }
 impl ThreadStateWrapper {

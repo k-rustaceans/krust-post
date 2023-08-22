@@ -16,12 +16,12 @@ use crate::domain::thread::{schemas::ClientMessage, Chatters, ThreadStateWrapper
 
 use super::response::ServiceError;
 
-pub(crate) struct ThreadHandler;
+pub struct ThreadHandler;
 impl ThreadHandler {
 	/// This function deals with a single websocket connection, i.e., a single
 	/// connected client / user, for which we will spawn two independent tasks (for
 	/// receiving / sending chat messages).
-	async fn run_socket_broker(
+	pub async fn run_socket_broker(
 		stream: WebSocket,
 		state: ThreadStateWrapper,
 	) {
@@ -32,9 +32,7 @@ impl ThreadHandler {
 			if let Ok(ClientMessage::JoinChat { post_id, .. }) = message.try_into() {
 				chatters = Some(ThreadHandler::get_or_create_thread(post_id, state.clone()).await);
 			} else {
-				let _ = sender
-					.send(String::from("Wrong input was given").into())
-					.await;
+				let _ = sender.send(String::from("Wrong input was given").into()).await;
 				return;
 			}
 		}
@@ -42,8 +40,7 @@ impl ThreadHandler {
 
 		// Receiver from given 'Chatters' object that belongs only to the single instance
 
-		let mut send_task =
-			ThreadHandler::_send_messages_from_chatroom_to_this_user(chatters.clone(), sender);
+		let mut send_task = ThreadHandler::_send_messages_from_chatroom_to_this_user(chatters.clone(), sender);
 
 		let mut recv_task = ThreadHandler::_receive_messages_from_this_user(receiver);
 
