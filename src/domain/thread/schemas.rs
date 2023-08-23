@@ -1,9 +1,10 @@
-use serde::Deserialize;
+use pulsar::SerializeMessage;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::services::response::ServiceError;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub enum ClientMessage {
 	JoinChat {
 		post_id: i64,
@@ -19,6 +20,16 @@ pub enum ClientMessage {
 		user_id: String,
 		content: String,
 	},
+}
+
+impl SerializeMessage for ClientMessage {
+	fn serialize_message(input: Self) -> Result<pulsar::producer::Message, pulsar::Error> {
+		let payload = serde_json::to_vec(&input).map_err(|e| pulsar::Error::Custom(e.to_string()))?;
+		Ok(pulsar::producer::Message {
+			payload,
+			..Default::default()
+		})
+	}
 }
 
 impl TryFrom<axum::extract::ws::Message> for ClientMessage {

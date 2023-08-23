@@ -63,6 +63,7 @@ pub enum ServiceError {
 	HttpError(Box<AnyError>),
 	BadRequest,
 	BaseError(BaseError),
+	MessagePublishingError,
 }
 
 impl Display for ServiceError {
@@ -80,6 +81,7 @@ impl Display for ServiceError {
 			ServiceError::BadRequest => write!(f, "BadRequest"),
 			ServiceError::BaseError(base) => write!(f, "{}", &base.to_string()),
 			ServiceError::UserCloseConnection => write!(f, "UserCloseConnection"),
+			ServiceError::MessagePublishingError => write!(f, "MessagePublishingError"),
 		}
 	}
 }
