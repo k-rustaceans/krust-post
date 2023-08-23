@@ -1,4 +1,4 @@
-use pulsar::SerializeMessage;
+use pulsar::{DeserializeMessage, Payload, SerializeMessage};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -29,6 +29,14 @@ impl SerializeMessage for ClientMessage {
 			payload,
 			..Default::default()
 		})
+	}
+}
+
+impl DeserializeMessage for ClientMessage {
+	type Output = Result<ClientMessage, serde_json::Error>;
+
+	fn deserialize_message(payload: &Payload) -> Self::Output {
+		serde_json::from_slice(&payload.data)
 	}
 }
 

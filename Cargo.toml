@@ -24,7 +24,7 @@ dotenv={version="*"}
 sqlx = { version = "*", features = [ "runtime-tokio-rustls", "migrate", "postgres","uuid","chrono","offline","decimal","json"] }
 uuid = { version = "1.3.3", features = ["v4", "fast-rng", "macro-diagnostics","serde" ]}
 env_logger = "*"
-pulsar = {version="*" }
+pulsar = {version="*",features=["telemetry"] }
 log = "*"
 futures = "*"
 futures-util="*"
@@ -33,3 +33,7 @@ futures-util="*"
 [[bin]]
 name = "web"
 path = "./src/bin/web/main.rs"
+
+
+[dev-dependencies]
+rand = "*"
