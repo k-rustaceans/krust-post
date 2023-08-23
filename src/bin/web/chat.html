@@ -28,7 +28,7 @@
                 websocket.onopen = function() {
                     console.log("connection opened");
                     // websocket.send(post_id.value +":"+user_id.value );
-                    let data = JSON.stringify({join_chat:{ post_id: Number(post_id.value),user_id:user_id.value}});
+                    let data = JSON.stringify({JoinChat:{ post_id: Number(post_id.value),user_id:user_id.value}});
                     console.log(data);
                     websocket.send(data);
                 }

@@ -32,8 +32,10 @@ impl ThreadHandler {
 			if let Ok(ClientMessage::JoinChat { post_id, user_id }) = message.try_into() {
 				chatters = Some(ThreadHandler::get_or_create_thread(post_id, state.clone()).await);
 
-				// Notify user join event!
-				if let Err(ServiceError::MessagePublishingError) = ThreadHandler::notify_user_join(post_id, user_id, state.clone()).await {
+				// Notify user join event by publishing it to a queue service
+				if let Err(ServiceError::MessagePublishingError) =
+					ThreadHandler::publish_client_message(ClientMessage::JoinChat { post_id, user_id }, state.clone()).await
+				{
 					let _ = sender.send(String::from("Message Publishing failed!").into()).await;
 					return;
 				}
@@ -57,21 +59,14 @@ impl ThreadHandler {
 			_ = (&mut recv_task) => send_task.abort(),
 		};
 	}
-	pub async fn notify_user_join(
-		post_id: i64,
-		user_id: String,
+	pub async fn publish_client_message(
+		msg: ClientMessage,
 		state: ThreadStateWrapper,
 	) -> Result<(), ServiceError> {
-		state
-			.write()
-			.await
-			.publisher
-			.send(ClientMessage::JoinChat { post_id, user_id })
-			.await
-			.map_err(|err| {
-				tracing::error!("Message publishing error while notifying user join :{:?}", err);
-				ServiceError::MessagePublishingError
-			})?;
+		state.write().await.publisher.send(msg).await.map_err(|err| {
+			tracing::error!("Message publishing error while notifying user join :{:?}", err);
+			ServiceError::MessagePublishingError
+		})?;
 		Ok(())
 	}
 
@@ -93,6 +88,7 @@ impl ThreadHandler {
 				if let Some(Ok(message)) = receiver.next().await {
 					match std::convert::TryInto::<ClientMessage>::try_into(message) {
 						Ok(client_message) => {
+
 							// TODO send client message to the topic
 						}
 						Err(ServiceError::UserCloseConnection) => {
@@ -153,13 +149,24 @@ mod test {
 				.into();
 
 				// Notify user join event
-				if let Err(err) = ThreadHandler::notify_user_join(p_id, "MigoMigo".into(), chat_state).await {
+				if let Err(err) = ThreadHandler::publish_client_message(
+					ClientMessage::JoinChat {
+						post_id: p_id,
+						user_id: "MigoMigo".to_string(),
+					},
+					chat_state,
+				)
+				.await
+				{
 					panic!("Error! {:?}", err)
 				}
 
 				// consume that message
 				let mut consumer: QueueConExecutor<ClientMessage> = QueueConExecutor::new(topic, subscription).await;
 				if let Some(msg) = consumer.try_next().await.unwrap() {
+					// ! Acknowledge first for convenience purpose.
+					consumer.ack(&msg).await.unwrap();
+					println!("{:?}", msg.deserialize().unwrap());
 					let ClientMessage::JoinChat { post_id, user_id } = msg.deserialize().unwrap() else{
 						panic!("Error Occurred!1692795460593")
 					};
@@ -167,8 +174,6 @@ mod test {
 					assert_eq!(post_id, p_id);
 					assert_eq!(user_id, "MigoMigo".to_string());
 					assert!(now <= Utc.timestamp_opt(msg.metadata().publish_time as i64, 0).unwrap());
-
-					consumer.ack(&msg).await.unwrap();
 				} else {
 					panic!("Test Failed!")
 				}

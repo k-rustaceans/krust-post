@@ -5,7 +5,6 @@ use uuid::Uuid;
 use crate::services::response::ServiceError;
 
 #[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
 pub enum ClientMessage {
 	JoinChat {
 		post_id: i64,
@@ -63,5 +62,8 @@ fn test_enum_representation() {
 		user_id: "Migo".to_string(),
 	};
 
-	println!("{:?}", serde_json::to_string(&join_message).unwrap())
+	let jsonified = serde_json::to_string(&join_message).unwrap();
+	println!("{:?}", jsonified);
+
+	println!("{:?}", serde_json::from_str::<ClientMessage>(&jsonified).unwrap());
 }
