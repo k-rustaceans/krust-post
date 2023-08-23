@@ -5,6 +5,7 @@ use uuid::Uuid;
 use crate::services::response::ServiceError;
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ClientMessage {
 	JoinChat {
 		post_id: i64,
@@ -25,6 +26,7 @@ pub enum ClientMessage {
 impl SerializeMessage for ClientMessage {
 	fn serialize_message(input: Self) -> Result<pulsar::producer::Message, pulsar::Error> {
 		let payload = serde_json::to_vec(&input).map_err(|e| pulsar::Error::Custom(e.to_string()))?;
+
 		Ok(pulsar::producer::Message {
 			payload,
 			..Default::default()
@@ -52,4 +54,14 @@ impl TryFrom<axum::extract::ws::Message> for ClientMessage {
 			_ => Err(ServiceError::BadRequest),
 		}
 	}
+}
+
+#[test]
+fn test_enum_representation() {
+	let join_message = ClientMessage::JoinChat {
+		post_id: 1,
+		user_id: "Migo".to_string(),
+	};
+
+	println!("{:?}", serde_json::to_string(&join_message).unwrap())
 }

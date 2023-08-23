@@ -37,3 +37,7 @@ path = "./src/bin/web/main.rs"
 
 [dev-dependencies]
 rand = "*"
+
+
+[features]
+test = []
