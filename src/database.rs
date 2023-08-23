@@ -164,7 +164,7 @@ impl<T: DeserializeMessage + 'static> DerefMut for QueueConExecutor<T> {
 }
 
 #[cfg(test)]
-mod test {
+pub mod test {
 
 	use futures::TryStreamExt;
 	use pulsar::{producer, Error as PulsarError, SerializeMessage};
@@ -189,7 +189,7 @@ mod test {
 		}
 	}
 
-	async fn set_up<T: DeserializeMessage + 'static>(
+	pub async fn set_up<T: DeserializeMessage + 'static>(
 		topic: &str,
 		subscription: &str,
 	) -> Result<(), PulsarError> {
@@ -231,7 +231,7 @@ mod test {
 		'_given: {
 			let topic = "persistent://public/default/test";
 			let subscription = "test_subscription";
-
+			set_up::<TestData>(topic, subscription).await.unwrap();
 			'_when: {
 				let mut producer = QueuePubExecutor::new(topic, "test_producer2").await;
 				producer

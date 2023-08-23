@@ -57,7 +57,7 @@ impl ThreadHandler {
 			_ = (&mut recv_task) => send_task.abort(),
 		};
 	}
-	async fn notify_user_join(
+	pub async fn notify_user_join(
 		post_id: i64,
 		user_id: String,
 		state: ThreadStateWrapper,
@@ -117,6 +117,61 @@ impl ThreadHandler {
 				let (tx, _rx) = broadcast::channel(100);
 				vacant_entry.insert(tx.clone().into());
 				tx.into()
+			}
+		}
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use chrono::{TimeZone, Utc};
+	use futures_util::TryStreamExt;
+	use rand::Rng;
+	use uuid::Uuid;
+
+	use crate::{
+		database::{test::set_up, QueueConExecutor, QueuePubExecutor},
+		domain::thread::{schemas::ClientMessage, ThreadState, ThreadStateWrapper},
+		services::handlers::ThreadHandler,
+	};
+	#[tokio::test]
+	async fn test_notify_user_join_event() {
+		'_given: {
+			let topic = "chat";
+			let subscription = "test";
+			set_up::<ClientMessage>(topic, subscription).await.unwrap();
+
+			'_when: {
+				let mut rng = rand::thread_rng();
+				let now = Utc::now();
+				let p_id = rng.gen::<i64>();
+
+				let chat_state: ThreadStateWrapper = ThreadState {
+					room: Default::default(),
+					publisher: QueuePubExecutor::new("chat", Uuid::new_v4().to_string().as_str()).await,
+				}
+				.into();
+
+				// Notify user join event
+				if let Err(err) = ThreadHandler::notify_user_join(p_id, "MigoMigo".into(), chat_state).await {
+					panic!("Error! {:?}", err)
+				}
+
+				// consume that message
+				let mut consumer: QueueConExecutor<ClientMessage> = QueueConExecutor::new(topic, subscription).await;
+				if let Some(msg) = consumer.try_next().await.unwrap() {
+					let ClientMessage::JoinChat { post_id, user_id } = msg.deserialize().unwrap() else{
+						panic!("Error Occurred!1692795460593")
+					};
+
+					assert_eq!(post_id, p_id);
+					assert_eq!(user_id, "MigoMigo".to_string());
+					assert!(now <= Utc.timestamp_opt(msg.metadata().publish_time as i64, 0).unwrap());
+
+					consumer.ack(&msg).await.unwrap();
+				} else {
+					panic!("Test Failed!")
+				}
 			}
 		}
 	}
