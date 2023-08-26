@@ -27,6 +27,14 @@ async fn chat_websocket_route(
 	ws.on_upgrade(|socket| ThreadHandler::run_socket_broker(socket, state))
 }
 
-pub fn post_routers() -> Router<ThreadStateWrapper> {
-	Router::new().route("/chat", get(chat_websocket_route))
+// ! deprecated
+use axum::response::Html;
+async fn index() -> Html<&'static str> {
+	Html(std::include_str!("./chat.html"))
+}
+
+pub fn post() -> Router<ThreadStateWrapper> {
+	let router = Router::new().route("/chat/ws", get(chat_websocket_route));
+
+	router.route("/chat", get(index))
 }
