@@ -1,7 +1,6 @@
 pub mod routers;
 
 use std::{env, net::SocketAddr, str::FromStr};
-use uuid::Uuid;
 
 use axum::{
 	http::{HeaderValue, Method},
@@ -9,8 +8,7 @@ use axum::{
 };
 
 use post::{
-	database::QueuePubExecutor,
-	dependencies::config,
+	dependencies::{config, queue_client},
 	domain::thread::{ThreadState, ThreadStateWrapper},
 };
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
@@ -38,7 +36,7 @@ async fn main() {
 	// let bus = Boostrap::message_bus().await;
 	let chat_state: ThreadStateWrapper = ThreadState {
 		room: Default::default(),
-		publisher: QueuePubExecutor::new("chat", Uuid::new_v4().to_string().as_str()).await,
+		queue_client: queue_client().await.into(),
 	}
 	.into();
 
