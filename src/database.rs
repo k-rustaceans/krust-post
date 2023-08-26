@@ -265,4 +265,112 @@ pub mod test {
 			cnt += 1;
 		}
 	}
+
+	#[tokio::test]
+	async fn test_round_trip_jet_stream_multi_consumer() {
+		let client = async_nats::connect("nats://0.0.0.0:4222").await.unwrap();
+
+		// println!("{}", inbox);
+		// Access the JetStream Context for managing streams and consumers as well as for publishing and subscription convenience methods.
+		let jetstream = jetstream::new(client);
+		let stream_name = String::from("TEST2");
+
+		let stream = jetstream
+			.get_or_create_stream(jetstream::stream::Config {
+				name: stream_name,
+				max_messages: 10_000,
+				subjects: vec!["events2.>".to_string()],
+
+				..Default::default()
+			})
+			.await
+			.unwrap();
+
+		// Publish a few messages for the example.
+		for i in 0..10 {
+			jetstream
+				.publish(format!("events2.{i}"), "data".into())
+				// The first `await` sends the publish
+				.await
+				.unwrap()
+				// The second `await` awaits a publish acknowledgement.
+				// This can be skipped (for the cost of processing guarantee)
+				// or deferred to not block another `publish`
+				.await
+				.unwrap();
+		}
+
+		tokio::join!(
+			{
+				let stream = stream.clone();
+				async move {
+					let consumer: PullConsumer = stream
+						.get_or_create_consumer(
+							"consumer1",
+							jetstream::consumer::pull::Config {
+								// inactive_threshold: Duration::from_secs(60),
+								durable_name: Some("test_group1".to_string()),
+
+								..Default::default()
+							},
+						)
+						.await
+						.unwrap();
+					let mut cnt = 0;
+					let mut messages = consumer.messages().await.unwrap().take(10);
+
+					while let Ok(Some(message)) = messages.try_next().await {
+						println!("iteration: from consumer1 {}", cnt + 1);
+						if cnt == 10 {
+							break;
+						}
+						println!(
+							"got message on subject {} with payload {:?}",
+							message.subject,
+							std::str::from_utf8(&message.payload).unwrap()
+						);
+
+						// acknowledge the message
+						message.ack().await.unwrap();
+						cnt += 1;
+					}
+				}
+			},
+			{
+				let stream = stream.clone();
+				async move {
+					let consumer: PullConsumer = stream
+						.get_or_create_consumer(
+							"consumer2",
+							jetstream::consumer::pull::Config {
+								// inactive_threshold: Duration::from_secs(60),
+								durable_name: Some("test_group2".to_string()),
+
+								..Default::default()
+							},
+						)
+						.await
+						.unwrap();
+					let mut cnt = 0;
+					let mut messages = consumer.messages().await.unwrap().take(10);
+
+					while let Ok(Some(message)) = messages.try_next().await {
+						println!("iteration: from consumer2 {}", cnt + 1);
+						if cnt == 10 {
+							break;
+						}
+						println!(
+							"got message on subject {} with payload {:?}",
+							message.subject,
+							std::str::from_utf8(&message.payload).unwrap()
+						);
+
+						// acknowledge the message
+						message.ack().await.unwrap();
+						cnt += 1;
+					}
+				}
+			}
+		);
+	}
 }
