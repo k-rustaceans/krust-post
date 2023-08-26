@@ -43,8 +43,6 @@ impl ThreadState {
 	}
 }
 
-
-
 impl Deref for ThreadState {
 	type Target = HashMap<ThreadNumber, Chatters>;
 	fn deref(&self) -> &Self::Target {

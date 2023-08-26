@@ -118,14 +118,9 @@ impl QueueConExecutor {
 
 #[cfg(test)]
 pub mod test {
-
-	use std::{thread::sleep, time::Duration};
-
-	use async_nats::jetstream::{
-		self,
-		consumer::{AckPolicy, DeliverPolicy, PushConsumer, ReplayPolicy},
-	};
-	use futures_util::StreamExt;
+	use async_nats::jetstream::{self, consumer::PullConsumer};
+	use futures::StreamExt;
+	use futures::TryStreamExt;
 	use serde::{Deserialize, Serialize};
 
 	#[derive(Serialize, Deserialize)]
@@ -134,47 +129,8 @@ pub mod test {
 	}
 
 	#[tokio::test]
-	async fn test_round_trip() {
-		let client = async_nats::connect("nats://localhost:4222").await.unwrap();
-
-		// Test Out Multiple consumption of messages
-		let mut subscriber = client.subscribe("messages".into()).await.unwrap();
-		let mut subscriber2 = client.subscribe("messages".into()).await.unwrap();
-
-		let test_data = "dsadsadsdas".to_string();
-		client.publish("messages".into(), test_data.clone().into()).await.unwrap();
-
-		let (f, s) = tokio::join!(
-			tokio::spawn({
-				let test_data = test_data.clone();
-				async move {
-					if let Some(message) = subscriber.next().await {
-						println!("Run First subscriber");
-						let payload = String::from_utf8(message.payload.to_vec()).unwrap();
-						assert_eq!(test_data, payload)
-					}
-				}
-			}),
-			tokio::spawn({
-				let test_data = test_data.clone();
-				async move {
-					if let Some(message) = subscriber2.next().await {
-						println!("Run Second subscriber");
-						let payload = String::from_utf8(message.payload.to_vec()).unwrap();
-						assert_eq!(test_data, payload)
-					}
-				}
-			})
-		);
-		f.unwrap();
-		s.unwrap();
-	}
-
-	#[tokio::test]
 	async fn test_round_trip_jetstream() {
 		let client = async_nats::connect("nats://0.0.0.0:4222").await.unwrap();
-
-		let inbox = client.new_inbox();
 
 		// println!("{}", inbox);
 		// Access the JetStream Context for managing streams and consumers as well as for publishing and subscription convenience methods.
@@ -182,8 +138,9 @@ pub mod test {
 		let stream_name = String::from("EVENTS");
 
 		let stream = jetstream
-			.create_stream(jetstream::stream::Config {
+			.get_or_create_stream(jetstream::stream::Config {
 				name: stream_name,
+				max_messages: 10_000,
 				subjects: vec!["events.>".to_string()],
 
 				..Default::default()
@@ -204,25 +161,27 @@ pub mod test {
 				.await
 				.unwrap();
 		}
+
 		// DeliverPolicy::ByStartTime { start_time: () }
 
-		let consumer = stream
-			.create_consumer(jetstream::consumer::push::Config {
-				deliver_subject: inbox,
-				// inactive_threshold: Duration::from_secs(60),
-				deliver_policy: DeliverPolicy::All,
-				ack_policy: AckPolicy::Explicit,
+		let consumer: PullConsumer = stream
+			.get_or_create_consumer(
+				"consumer",
+				jetstream::consumer::pull::Config {
+					// inactive_threshold: Duration::from_secs(60),
+					durable_name: Some("MyGroup".to_string()),
 
-				durable_name: Some("MyGroup".to_string()),
-				deliver_group: Some("youd".to_string()),
-				..Default::default()
-			})
+					..Default::default()
+				},
+			)
 			.await
 			.unwrap();
 
+		// let mut messages = consumer.messages().await.unwrap().take(10);
+		// let a = consumer.messages().await.unwrap().next().await;
+
 		let mut messages = consumer.messages().await.unwrap().take(10);
-		while let Some(message) = messages.next().await {
-			let message = message.unwrap();
+		while let Ok(Some(message)) = messages.try_next().await {
 			println!(
 				"got message on subject {} with payload {:?}",
 				message.subject,
@@ -231,6 +190,79 @@ pub mod test {
 
 			// acknowledge the message
 			message.ack().await.unwrap();
+		}
+	}
+
+	#[tokio::test]
+	async fn test_round_trip_jet_stream_batch() {
+		let client = async_nats::connect("nats://0.0.0.0:4222").await.unwrap();
+
+		// println!("{}", inbox);
+		// Access the JetStream Context for managing streams and consumers as well as for publishing and subscription convenience methods.
+		let jetstream = jetstream::new(client);
+		let stream_name = String::from("TEST2");
+
+		let stream = jetstream
+			.get_or_create_stream(jetstream::stream::Config {
+				name: stream_name,
+				max_messages: 10_000,
+				subjects: vec!["events2.>".to_string()],
+
+				..Default::default()
+			})
+			.await
+			.unwrap();
+
+		// Publish a few messages for the example.
+		for i in 0..100 {
+			jetstream
+				.publish(format!("events2.{i}"), "data".into())
+				// The first `await` sends the publish
+				.await
+				.unwrap()
+				// The second `await` awaits a publish acknowledgement.
+				// This can be skipped (for the cost of processing guarantee)
+				// or deferred to not block another `publish`
+				.await
+				.unwrap();
+		}
+
+		// DeliverPolicy::ByStartTime { start_time: () }
+
+		let consumer: PullConsumer = stream
+			.get_or_create_consumer(
+				"consumer",
+				jetstream::consumer::pull::Config {
+					// inactive_threshold: Duration::from_secs(60),
+					durable_name: Some("MyGroup".to_string()),
+
+					..Default::default()
+				},
+			)
+			.await
+			.unwrap();
+
+		// let mut messages = consumer.messages().await.unwrap().take(10);
+		// let a = consumer.messages().await.unwrap().next().await;
+
+		let mut cnt = 0;
+		let mut batches = consumer.sequence(10).unwrap().take(10);
+		while let Ok(Some(mut batch)) = batches.try_next().await {
+			println!("iteration: {}", cnt + 1);
+			if cnt == 10 {
+				break;
+			}
+			while let Ok(Some(message)) = batch.try_next().await {
+				println!(
+					"got message on subject {} with payload {:?}",
+					message.subject,
+					std::str::from_utf8(&message.payload).unwrap()
+				);
+
+				// acknowledge the message
+				message.ack().await.unwrap();
+			}
+			cnt += 1;
 		}
 	}
 }

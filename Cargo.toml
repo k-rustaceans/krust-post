@@ -27,7 +27,7 @@ env_logger = "*"
 async-nats = { git = "https://github.com/nats-io/nats.rs" }
 log = "*"
 futures = "*"
-futures-util="*"
+
 bytes="*"
 
 [[bin]]

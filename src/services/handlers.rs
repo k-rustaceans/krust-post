@@ -2,7 +2,7 @@ use std::collections::hash_map::Entry;
 
 use axum::extract::ws::{Message, WebSocket};
 
-use futures_util::{
+use futures::{
 	stream::{SplitSink, SplitStream},
 	SinkExt, StreamExt,
 };
@@ -123,7 +123,7 @@ impl ThreadHandler {
 #[cfg(test)]
 mod test {
 
-	use futures_util::StreamExt;
+	use futures::StreamExt;
 	use rand::Rng;
 
 	use crate::{
