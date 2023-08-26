@@ -1,5 +1,6 @@
 use std::sync::OnceLock;
 
+use async_nats::Client;
 use event_driven_library::responses::BaseError;
 use sqlx::{postgres::PgPoolOptions, PgPool};
 
@@ -55,4 +56,17 @@ pub async fn connection_pool() -> &'static PgPool {
 		Some(pool) => pool,
 	};
 	p
+}
+
+pub async fn queue_client() -> &'static Client {
+	static CLIENT: OnceLock<Client> = OnceLock::new();
+
+	let c = match CLIENT.get() {
+		None => {
+			let cl = async_nats::ConnectOptions::new().name("r").connect(&config().queue_url).await.unwrap();
+			CLIENT.get_or_init(|| cl)
+		}
+		Some(c) => c,
+	};
+	c
 }

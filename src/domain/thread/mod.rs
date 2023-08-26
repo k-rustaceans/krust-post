@@ -5,12 +5,13 @@ use std::{
 	sync::Arc,
 };
 
+use async_nats::Subscriber;
 // domain for messaging feature
 use chrono::{DateTime, Utc};
 use tokio::sync::{broadcast, Mutex, MutexGuard};
 use uuid::Uuid;
 
-use crate::database::QueuePubExecutor;
+use crate::database::QueueClient;
 
 pub struct MainThreadMessage {
 	pub id: Uuid,
@@ -30,8 +31,19 @@ pub struct SubThreadMessage {
 
 pub struct ThreadState {
 	pub room: HashMap<ThreadNumber, Chatters>,
-	pub publisher: QueuePubExecutor,
+	pub queue_client: QueueClient,
 }
+
+impl ThreadState {
+	pub async fn subscribe(
+		&self,
+		subject: &str,
+	) -> Result<Subscriber, async_nats::SubscribeError> {
+		self.queue_client.subscribe(subject.to_string()).await
+	}
+}
+
+
 
 impl Deref for ThreadState {
 	type Target = HashMap<ThreadNumber, Chatters>;

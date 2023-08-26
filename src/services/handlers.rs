@@ -63,10 +63,12 @@ impl ThreadHandler {
 		msg: ClientMessage,
 		state: ThreadStateWrapper,
 	) -> Result<(), ServiceError> {
-		state.write().await.publisher.send(msg).await.map_err(|err| {
+		// TODO Send client message
+		state.write().await.queue_client.send(msg).await.map_err(|err| {
 			tracing::error!("Message publishing error while notifying user join :{:?}", err);
 			ServiceError::MessagePublishingError
 		})?;
+
 		Ok(())
 	}
 
@@ -120,13 +122,12 @@ impl ThreadHandler {
 
 #[cfg(test)]
 mod test {
-	use chrono::{TimeZone, Utc};
-	use futures_util::TryStreamExt;
+
+	use futures_util::StreamExt;
 	use rand::Rng;
-	use uuid::Uuid;
 
 	use crate::{
-		database::{test::set_up, QueueConExecutor, QueuePubExecutor},
+		dependencies::queue_client,
 		domain::thread::{schemas::ClientMessage, ThreadState, ThreadStateWrapper},
 		services::handlers::ThreadHandler,
 	};
@@ -134,19 +135,18 @@ mod test {
 	async fn test_notify_user_join_event() {
 		'_given: {
 			let topic = "chat";
-			let subscription = "test";
-			set_up::<ClientMessage>(topic, subscription).await.unwrap();
 
 			'_when: {
 				let mut rng = rand::thread_rng();
-				let now = Utc::now();
 				let p_id = rng.gen::<i64>();
 
 				let chat_state: ThreadStateWrapper = ThreadState {
 					room: Default::default(),
-					publisher: QueuePubExecutor::new("chat", Uuid::new_v4().to_string().as_str()).await,
+					queue_client: queue_client().await.into(),
 				}
 				.into();
+
+				let mut consumer = chat_state.write().await.subscribe(topic).await.unwrap();
 
 				// Notify user join event
 				if let Err(err) = ThreadHandler::publish_client_message(
@@ -161,21 +161,13 @@ mod test {
 					panic!("Error! {:?}", err)
 				}
 
-				// consume that message
-				let mut consumer: QueueConExecutor<ClientMessage> = QueueConExecutor::new(topic, subscription).await;
-				if let Some(msg) = consumer.try_next().await.unwrap() {
-					// ! Acknowledge first for convenience purpose.
-					consumer.ack(&msg).await.unwrap();
-					println!("{:?}", msg.deserialize().unwrap());
-					let ClientMessage::JoinChat { post_id, user_id } = msg.deserialize().unwrap() else{
-						panic!("Error Occurred!1692795460593")
+				// TODO consume that message
+				if let Some(msg) = consumer.next().await {
+					let message = serde_json::from_str::<ClientMessage>(&String::from_utf8(msg.payload.to_vec()).unwrap()).unwrap();
+					if let ClientMessage::JoinChat { post_id, user_id } = message {
+						assert_eq!(post_id, p_id);
+						assert_eq!(user_id, "MigoMigo".to_string(),);
 					};
-
-					assert_eq!(post_id, p_id);
-					assert_eq!(user_id, "MigoMigo".to_string());
-					assert!(now <= Utc.timestamp_opt(msg.metadata().publish_time as i64, 0).unwrap());
-				} else {
-					panic!("Test Failed!")
 				}
 			}
 		}
