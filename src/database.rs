@@ -130,7 +130,7 @@ pub mod test {
 
 	#[tokio::test]
 	async fn test_round_trip_jetstream() {
-		let client = async_nats::connect("nats://0.0.0.0:4222").await.unwrap();
+		let client = async_nats::connect("nats://host.docker.internal:4222").await.unwrap();
 
 		// println!("{}", inbox);
 		// Access the JetStream Context for managing streams and consumers as well as for publishing and subscription convenience methods.
@@ -195,7 +195,7 @@ pub mod test {
 
 	#[tokio::test]
 	async fn test_round_trip_jet_stream_batch() {
-		let client = async_nats::connect("nats://0.0.0.0:4222").await.unwrap();
+		let client = async_nats::connect("nats://host.docker.internal:4222").await.unwrap();
 
 		// println!("{}", inbox);
 		// Access the JetStream Context for managing streams and consumers as well as for publishing and subscription convenience methods.
@@ -268,7 +268,7 @@ pub mod test {
 
 	#[tokio::test]
 	async fn test_round_trip_jet_stream_multi_consumer() {
-		let client = async_nats::connect("nats://0.0.0.0:4222").await.unwrap();
+		let client = async_nats::connect("nats://host.docker.internal:4222").await.unwrap();
 
 		// println!("{}", inbox);
 		// Access the JetStream Context for managing streams and consumers as well as for publishing and subscription convenience methods.
