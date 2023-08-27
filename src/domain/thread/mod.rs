@@ -1,17 +1,18 @@
 pub mod schemas;
 use std::{
 	collections::HashMap,
+	error::Error,
 	ops::{Deref, DerefMut},
 	sync::Arc,
 };
 
-use async_nats::Subscriber;
+use async_nats::jetstream::stream::Stream;
 // domain for messaging feature
 use chrono::{DateTime, Utc};
 use tokio::sync::{broadcast, Mutex, MutexGuard};
 use uuid::Uuid;
 
-use crate::database::QueueClient;
+use crate::database::{QueueClient, QueueConExecutor};
 
 pub struct MainThreadMessage {
 	pub id: Uuid,
@@ -35,11 +36,12 @@ pub struct ThreadState {
 }
 
 impl ThreadState {
-	pub async fn subscribe(
+	pub async fn consumer(
 		&self,
-		subject: &str,
-	) -> Result<Subscriber, async_nats::SubscribeError> {
-		self.queue_client.subscribe(subject.to_string()).await
+		stream: Stream,
+		durable_name: &str,
+	) -> Result<QueueConExecutor, Box<dyn Error>> {
+		self.queue_client.consumer(stream, durable_name).await
 	}
 }
 
