@@ -1,8 +1,14 @@
-use async_nats::{Client, Subscriber};
+use async_nats::jetstream::{self, consumer::PullConsumer, stream::Stream, Context};
 use bytes::Bytes;
 use event_driven_library::responses::BaseError;
+use uuid::Uuid;
 
-use std::{mem, ops::Deref, sync::Arc};
+use std::{
+	error::Error,
+	mem,
+	ops::{Deref, DerefMut},
+	sync::Arc,
+};
 
 use sqlx::{postgres::PgPool, Postgres, Transaction};
 
@@ -75,21 +81,69 @@ impl From<DatabaseExecutor> for Arc<RwLock<DatabaseExecutor>> {
 	}
 }
 
-pub struct QueueClient(&'static Client);
+pub struct QueueClient(&'static Context);
 
 impl QueueClient {
+	pub async fn new() -> Self {
+		let jetstream = queue_client().await;
+
+		Self(jetstream)
+	}
+
 	pub async fn send(
 		&self,
+		subject: &str,
 		msg: ClientMessage,
-	) -> std::result::Result<(), async_nats::PublishError> {
+	) -> std::result::Result<(), Box<dyn Error>> {
 		let msg: Bytes = serde_json::to_string(&msg).unwrap().into();
 
-		self.publish("chat".into(), msg).await
+		self.publish(subject.into(), msg).await?.await?;
+		Ok(())
+	}
+	pub async fn get_or_create_stream(
+		&self,
+		stream_name: Option<&str>,
+		subjects: Vec<String>,
+	) -> Result<Stream, Box<dyn Error>> {
+		Ok(self
+			.0
+			.get_or_create_stream(jetstream::stream::Config {
+				name: match stream_name {
+					Some(val) => val.to_string(),
+					None => Uuid::new_v4().to_string(),
+				},
+				max_messages: 10_000,
+				subjects,
+
+				..Default::default()
+			})
+			.await?)
+	}
+
+	pub async fn consumer(
+		&self,
+		stream: Stream,
+		durable_name: &str,
+	) -> Result<QueueConExecutor, Box<dyn Error>> {
+		Ok(stream
+			.get_or_create_consumer(
+				// TODO Set consumer name
+				"consumer",
+				jetstream::consumer::pull::Config {
+					// inactive_threshold: Duration::from_secs(60),
+					// TODO Set durable group
+					durable_name: Some(durable_name.into()),
+
+					..Default::default()
+				},
+			)
+			.await?
+			.into())
 	}
 }
 
-impl From<&'static Client> for QueueClient {
-	fn from(value: &'static Client) -> Self {
+impl From<&'static Context> for QueueClient {
+	fn from(value: &'static Context) -> Self {
 		QueueClient(value)
 	}
 }
@@ -101,18 +155,29 @@ impl From<QueueClient> for Arc<RwLock<QueueClient>> {
 }
 
 impl Deref for QueueClient {
-	type Target = &'static Client;
+	type Target = &'static Context;
 	fn deref(&self) -> &Self::Target {
 		&self.0
 	}
 }
 
-pub struct QueueConExecutor(Subscriber);
+pub struct QueueConExecutor(PullConsumer);
+impl From<PullConsumer> for QueueConExecutor {
+	fn from(value: PullConsumer) -> Self {
+		Self(value)
+	}
+}
 
-impl QueueConExecutor {
-	pub async fn new(topic: &str) -> Self {
-		let client: &'static Client = queue_client().await;
-		Self(client.subscribe(topic.into()).await.unwrap())
+impl Deref for QueueConExecutor {
+	type Target = PullConsumer;
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+impl DerefMut for QueueConExecutor {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.0
 	}
 }
 
@@ -133,9 +198,9 @@ pub mod test {
 		let client = async_nats::connect("nats://0.0.0.0:4222").await.unwrap();
 
 		// println!("{}", inbox);
-		// Access the JetStream Context for managing streams and consumers as well as for publishing and subscription convenience methods.
+		// Access the JetStream Stream for managing streams and consumers as well as for publishing and subscription convenience methods.
 		let jetstream = jetstream::new(client);
-		let stream_name = String::from("EVENTS");
+		let stream_name = String::from("test_stream");
 
 		let stream = jetstream
 			.get_or_create_stream(jetstream::stream::Config {
@@ -177,9 +242,6 @@ pub mod test {
 			.await
 			.unwrap();
 
-		// let mut messages = consumer.messages().await.unwrap().take(10);
-		// let a = consumer.messages().await.unwrap().next().await;
-
 		let mut messages = consumer.messages().await.unwrap().take(10);
 		while let Ok(Some(message)) = messages.try_next().await {
 			println!(
@@ -198,7 +260,7 @@ pub mod test {
 		let client = async_nats::connect("nats://0.0.0.0:4222").await.unwrap();
 
 		// println!("{}", inbox);
-		// Access the JetStream Context for managing streams and consumers as well as for publishing and subscription convenience methods.
+		// Access the JetStream Stream for managing streams and consumers as well as for publishing and subscription convenience methods.
 		let jetstream = jetstream::new(client);
 		let stream_name = String::from("TEST2");
 
@@ -271,7 +333,7 @@ pub mod test {
 		let client = async_nats::connect("nats://0.0.0.0:4222").await.unwrap();
 
 		// println!("{}", inbox);
-		// Access the JetStream Context for managing streams and consumers as well as for publishing and subscription convenience methods.
+		// Access the JetStream Stream for managing streams and consumers as well as for publishing and subscription convenience methods.
 		let jetstream = jetstream::new(client);
 		let stream_name = String::from("TEST2");
 

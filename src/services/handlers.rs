@@ -34,7 +34,7 @@ impl ThreadHandler {
 
 				// Notify user join event by publishing it to a queue service
 				if let Err(ServiceError::MessagePublishingError) =
-					ThreadHandler::publish_client_message(ClientMessage::JoinChat { post_id, user_id }, state.clone()).await
+					ThreadHandler::publish_client_message("join", ClientMessage::JoinChat { post_id, user_id }, state.clone()).await
 				{
 					let _ = sender.send(String::from("Message Publishing failed!").into()).await;
 					return;
@@ -60,11 +60,12 @@ impl ThreadHandler {
 		};
 	}
 	pub async fn publish_client_message(
+		subject: &str,
 		msg: ClientMessage,
 		state: ThreadStateWrapper,
 	) -> Result<(), ServiceError> {
 		// TODO Send client message
-		state.write().await.queue_client.send(msg).await.map_err(|err| {
+		state.write().await.queue_client.send(subject, msg).await.map_err(|err| {
 			tracing::error!("Message publishing error while notifying user join :{:?}", err);
 			ServiceError::MessagePublishingError
 		})?;
@@ -124,8 +125,10 @@ impl ThreadHandler {
 mod test {
 
 	use futures::StreamExt;
+	use futures::TryStreamExt;
 	use rand::Rng;
 
+	use crate::database::QueueConExecutor;
 	use crate::{
 		dependencies::queue_client,
 		domain::thread::{schemas::ClientMessage, ThreadState, ThreadStateWrapper},
@@ -134,22 +137,34 @@ mod test {
 	#[tokio::test]
 	async fn test_notify_user_join_event() {
 		'_given: {
-			let topic = "chat";
+			let topic = "events.>".to_string();
+			let stream_name = "test_stream";
+			let durable_name = "test_durable";
+			let chat_state: ThreadStateWrapper = ThreadState {
+				room: Default::default(),
+				queue_client: queue_client().await.into(),
+			}
+			.into();
 
 			'_when: {
 				let mut rng = rand::thread_rng();
 				let p_id = rng.gen::<i64>();
+				println!("{}", p_id);
 
-				let chat_state: ThreadStateWrapper = ThreadState {
-					room: Default::default(),
-					queue_client: queue_client().await.into(),
-				}
-				.into();
+				let stream = chat_state
+					.write()
+					.await
+					.queue_client
+					.get_or_create_stream(Some(stream_name), vec![topic.clone()])
+					.await
+					.unwrap();
+				stream.purge().filter(&topic).await.unwrap();
 
-				let mut consumer = chat_state.write().await.subscribe(topic).await.unwrap();
+				let consumer: QueueConExecutor = chat_state.write().await.consumer(stream, durable_name).await.unwrap();
 
 				// Notify user join event
 				if let Err(err) = ThreadHandler::publish_client_message(
+					&topic,
 					ClientMessage::JoinChat {
 						post_id: p_id,
 						user_id: "MigoMigo".to_string(),
@@ -162,7 +177,8 @@ mod test {
 				}
 
 				// TODO consume that message
-				if let Some(msg) = consumer.next().await {
+
+				if let Ok(Some(msg)) = consumer.messages().await.unwrap().take(1).try_next().await {
 					let message = serde_json::from_str::<ClientMessage>(&String::from_utf8(msg.payload.to_vec()).unwrap()).unwrap();
 					if let ClientMessage::JoinChat { post_id, user_id } = message {
 						assert_eq!(post_id, p_id);

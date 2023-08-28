@@ -7,4 +7,5 @@ pub(crate) mod config;
 pub mod database;
 pub mod dependencies;
 pub mod domain;
+
 pub mod services;
