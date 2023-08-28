@@ -41,7 +41,6 @@ async fn main() {
 	.into();
 
 	let routers = Router::new()
-		// TODO Order of layer matters to the execution. ATM, nothing has been settled. The order the following middleware is invoked up here so it doesn't affect dev process yet.
 		// .layer(middleware::from_fn(middlewares::auth))
 		.nest("/posts", routers::post())
 		.with_state(chat_state);

@@ -1,10 +1,11 @@
 use std::collections::hash_map::Entry;
 
+use async_nats::jetstream::{self, consumer::PullConsumer};
 use axum::extract::ws::{Message, WebSocket};
 
 use futures::{
 	stream::{SplitSink, SplitStream},
-	SinkExt, StreamExt,
+	SinkExt, StreamExt, TryStreamExt,
 };
 
 use tokio::{
@@ -34,7 +35,7 @@ impl ThreadHandler {
 
 				// Notify user join event by publishing it to a queue service
 				if let Err(ServiceError::MessagePublishingError) =
-					ThreadHandler::publish_client_message("join", ClientMessage::JoinChat { post_id, user_id }, state.clone()).await
+					ThreadHandler::publish_client_message(ClientMessage::JoinChat { post_id, user_id }, state.clone()).await
 				{
 					let _ = sender.send(String::from("Message Publishing failed!").into()).await;
 					return;
@@ -50,7 +51,7 @@ impl ThreadHandler {
 
 		let mut send_task = ThreadHandler::_send_messages_from_chatroom_to_this_user(chatters.clone(), sender);
 
-		let mut recv_task = ThreadHandler::_receive_messages_from_this_user(receiver);
+		let mut recv_task = ThreadHandler::_receive_messages_from_this_user(receiver, state.clone());
 
 		// Waits on multiple concurrent branches, returning when the first branch completes,
 		// cancelling the remaining branches.
@@ -60,12 +61,12 @@ impl ThreadHandler {
 		};
 	}
 	pub async fn publish_client_message(
-		subject: &str,
 		msg: ClientMessage,
 		state: ThreadStateWrapper,
 	) -> Result<(), ServiceError> {
 		// TODO Send client message
-		state.write().await.queue_client.send(subject, msg).await.map_err(|err| {
+		state.write().await.queue_client.send(msg.subject(), msg).await.map_err(|err| {
+			println!("{:?}", err);
 			tracing::error!("Message publishing error while notifying user join :{:?}", err);
 			ServiceError::MessagePublishingError
 		})?;
@@ -85,25 +86,66 @@ impl ThreadHandler {
 			}
 		})
 	}
-	fn _receive_messages_from_this_user(mut receiver: SplitStream<WebSocket>) -> JoinHandle<()> {
+	fn _receive_messages_from_this_user(
+		mut receiver: SplitStream<WebSocket>,
+		state: ThreadStateWrapper,
+	) -> JoinHandle<Result<(), ServiceError>> {
 		tokio::spawn(async move {
-			'recv_loop: loop {
+			loop {
 				if let Some(Ok(message)) = receiver.next().await {
-					match std::convert::TryInto::<ClientMessage>::try_into(message) {
-						Ok(client_message) => {
-
-							// TODO send client message to the topic
-						}
-						Err(ServiceError::UserCloseConnection) => {
-							println!("User closed the connection!");
-							// TODO send user_quit message to the topic
-							break 'recv_loop;
-						}
-						_ => break 'recv_loop,
-					}
+					let client_message = std::convert::TryInto::<ClientMessage>::try_into(message)?;
+					ThreadHandler::publish_client_message(client_message, state.clone()).await?;
 				}
 			}
 		})
+	}
+
+	async fn run_global_consumer(
+		state: ThreadStateWrapper,
+		durable_name: &str,
+	) {
+		// TODO subjects from config
+		// TODO error handling
+
+		let consumer: PullConsumer = state
+			.write()
+			.await
+			.queue_client
+			.get_or_create_stream("chat_stream", vec!["chat.>".to_string()])
+			.await
+			.unwrap()
+			.get_or_create_consumer(
+				"chat_consumer",
+				jetstream::consumer::pull::Config {
+					// inactive_threshold: Duration::from_secs(60),
+					// TODO Set durable group
+					durable_name: Some(durable_name.into()),
+
+					..Default::default()
+				},
+			)
+			.await
+			.unwrap();
+
+		let mut batches = consumer.sequence(10).unwrap().take(10);
+		while let Ok(Some(mut batch)) = batches.try_next().await {
+			while let Ok(Some(message)) = batch.try_next().await {
+				let clinet_message = serde_json::from_str::<ClientMessage>(std::str::from_utf8(&message.payload).unwrap()).unwrap();
+				// TODO distributing messages to
+				match clinet_message {
+					ClientMessage::JoinChat { post_id, user_id } => todo!(),
+					ClientMessage::WriteMainThread { post_id, user_id, content } => todo!(),
+					ClientMessage::WriteSubThread {
+						main_thread_id,
+						user_id,
+						content,
+					} => todo!(),
+				}
+
+				// acknowledge the message
+				message.ack().await.unwrap();
+			}
+		}
 	}
 
 	async fn get_or_create_thread(
@@ -124,6 +166,7 @@ impl ThreadHandler {
 #[cfg(test)]
 mod test {
 
+	use async_nats::jetstream;
 	use futures::StreamExt;
 	use futures::TryStreamExt;
 	use rand::Rng;
@@ -137,7 +180,7 @@ mod test {
 	#[tokio::test]
 	async fn test_notify_user_join_event() {
 		'_given: {
-			let topic = "events.>".to_string();
+			let topic = "chat.>".to_string();
 			let stream_name = "test_stream";
 			let durable_name = "test_durable";
 			let chat_state: ThreadStateWrapper = ThreadState {
@@ -151,20 +194,43 @@ mod test {
 				let p_id = rng.gen::<i64>();
 				println!("{}", p_id);
 
-				let stream = chat_state
+				let mut stream = chat_state
 					.write()
 					.await
 					.queue_client
-					.get_or_create_stream(Some(stream_name), vec![topic.clone()])
+					.get_or_create_stream(stream_name, vec![topic.clone()])
 					.await
 					.unwrap();
+				println!("{:?}", stream.info().await.unwrap().config.name);
+
 				stream.purge().filter(&topic).await.unwrap();
 
-				let consumer: QueueConExecutor = chat_state.write().await.consumer(stream, durable_name).await.unwrap();
+				let consumer = stream
+					.get_or_create_consumer(
+						"test_stream",
+						jetstream::consumer::pull::Config {
+							// inactive_threshold: Duration::from_secs(60),
+							// TODO Set durable group
+							durable_name: Some(durable_name.into()),
+
+							..Default::default()
+						},
+					)
+					.await
+					.unwrap();
+
+				let j = tokio::spawn(async move {
+					if let Ok(Some(msg)) = consumer.messages().await.unwrap().take(1).try_next().await {
+						let message = serde_json::from_str::<ClientMessage>(std::str::from_utf8(&msg.payload).unwrap()).unwrap();
+						if let ClientMessage::JoinChat { post_id, user_id } = message {
+							assert_eq!(post_id, p_id);
+							assert_eq!(user_id, "MigoMigo".to_string(),);
+						};
+					}
+				});
 
 				// Notify user join event
 				if let Err(err) = ThreadHandler::publish_client_message(
-					&topic,
 					ClientMessage::JoinChat {
 						post_id: p_id,
 						user_id: "MigoMigo".to_string(),
@@ -176,15 +242,9 @@ mod test {
 					panic!("Error! {:?}", err)
 				}
 
-				// TODO consume that message
+				j.await.unwrap()
 
-				if let Ok(Some(msg)) = consumer.messages().await.unwrap().take(1).try_next().await {
-					let message = serde_json::from_str::<ClientMessage>(&String::from_utf8(msg.payload.to_vec()).unwrap()).unwrap();
-					if let ClientMessage::JoinChat { post_id, user_id } = message {
-						assert_eq!(post_id, p_id);
-						assert_eq!(user_id, "MigoMigo".to_string(),);
-					};
-				}
+				// TODO consume that message
 			}
 		}
 	}
