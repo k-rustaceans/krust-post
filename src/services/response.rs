@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::fmt::Display;
 
 use event_driven_library::responses::{AnyError, ApplicationResponse, BaseError};
@@ -64,6 +65,7 @@ pub enum ServiceError {
 	BadRequest,
 	BaseError(BaseError),
 	MessagePublishingError,
+	QueueServiceError,
 }
 
 impl Display for ServiceError {
@@ -82,6 +84,7 @@ impl Display for ServiceError {
 			ServiceError::BaseError(base) => write!(f, "{}", &base.to_string()),
 			ServiceError::UserCloseConnection => write!(f, "UserCloseConnection"),
 			ServiceError::MessagePublishingError => write!(f, "MessagePublishingError"),
+			ServiceError::QueueServiceError => write!(f, "QueueServiceError"),
 		}
 	}
 }
