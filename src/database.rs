@@ -1,7 +1,6 @@
 use async_nats::jetstream::{self, consumer::PullConsumer, stream::Stream, Context};
 use bytes::Bytes;
 use event_driven_library::responses::BaseError;
-use uuid::Uuid;
 
 use std::{
 	error::Error,
@@ -98,6 +97,7 @@ impl QueueClient {
 		let msg: Bytes = serde_json::to_string(&msg).unwrap().into();
 
 		self.publish(subject.into(), msg).await?.await?;
+
 		Ok(())
 	}
 	pub async fn get_or_create_stream(
@@ -115,27 +115,6 @@ impl QueueClient {
 				..Default::default()
 			})
 			.await?)
-	}
-
-	pub async fn consumer(
-		&self,
-		stream: Stream,
-		durable_name: &str,
-	) -> Result<QueueConExecutor, Box<dyn Error>> {
-		Ok(stream
-			.get_or_create_consumer(
-				// TODO Set consumer name
-				"consumer",
-				jetstream::consumer::pull::Config {
-					// inactive_threshold: Duration::from_secs(60),
-					// TODO Set durable group
-					durable_name: Some(durable_name.into()),
-
-					..Default::default()
-				},
-			)
-			.await?
-			.into())
 	}
 }
 
