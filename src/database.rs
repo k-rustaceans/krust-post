@@ -102,16 +102,13 @@ impl QueueClient {
 	}
 	pub async fn get_or_create_stream(
 		&self,
-		stream_name: Option<&str>,
+		stream_name: &str,
 		subjects: Vec<String>,
 	) -> Result<Stream, Box<dyn Error>> {
 		Ok(self
 			.0
 			.get_or_create_stream(jetstream::stream::Config {
-				name: match stream_name {
-					Some(val) => val.to_string(),
-					None => Uuid::new_v4().to_string(),
-				},
+				name: stream_name.to_string(),
 				max_messages: 10_000,
 				subjects,
 

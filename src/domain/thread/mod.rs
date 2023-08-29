@@ -35,16 +35,6 @@ pub struct ThreadState {
 	pub queue_client: QueueClient,
 }
 
-impl ThreadState {
-	pub async fn consumer(
-		&self,
-		stream: Stream,
-		durable_name: &str,
-	) -> Result<QueueConExecutor, Box<dyn Error>> {
-		self.queue_client.consumer(stream, durable_name).await
-	}
-}
-
 impl Deref for ThreadState {
 	type Target = HashMap<ThreadNumber, Chatters>;
 	fn deref(&self) -> &Self::Target {

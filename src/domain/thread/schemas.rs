@@ -21,6 +21,16 @@ pub enum ClientMessage {
 	},
 }
 
+impl ClientMessage {
+	pub(crate) fn subject<'a>(&self) -> &'a str {
+		match self {
+			Self::JoinChat { .. } => "chat.post.join",
+			Self::WriteMainThread { .. } => "chat.post.main.write",
+			Self::WriteSubThread { .. } => "chat.post.sub.write",
+		}
+	}
+}
+
 impl TryFrom<axum::extract::ws::Message> for ClientMessage {
 	type Error = ServiceError;
 	fn try_from(value: axum::extract::ws::Message) -> Result<Self, Self::Error> {
